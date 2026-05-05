@@ -1,33 +1,628 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { fetchInteractions, addInteraction, chatWithAgent, addChatUserMessage } from './features/interactionSlice';
-import { Send, MessageSquare, Save, History, User, Bot, ClipboardList, Activity, LayoutDashboard, FileText } from 'lucide-react';
 
-function App() {
+// ─── Design Tokens ──────────────────────────────────────────────────────────
+const tokens = {
+  teal: { bg: "#E1F5EE", border: "#9FE1CB", text: "#085041", mid: "#1D9E75" },
+  blue: { bg: "#E6F1FB", border: "#B5D4F4", text: "#0C447C" },
+  amber: { bg: "#FAEEDA", border: "#FAC775", text: "#633806" },
+  coral: { bg: "#F5C4B3", border: "#F0997B", text: "#993C1D" },
+};
+
+// ─── Helper Components ────────────────────────────────────────────────────────
+function Avatar({ initials, color, size = 32 }) {
+  const c = tokens[color] || tokens.teal;
+  return (
+    <div
+      style={{
+        width: size,
+        height: size,
+        borderRadius: "50%",
+        background: c.bg,
+        border: `0.5px solid ${c.border}`,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        fontSize: size * 0.3,
+        fontWeight: 500,
+        color: c.text,
+        flexShrink: 0,
+        fontFamily: "'DM Sans', sans-serif",
+      }}
+    >
+      {initials}
+    </div>
+  );
+}
+
+function Tag({ label, color = "teal" }) {
+  const c = tokens[color] || tokens.teal;
+  return (
+    <span
+      style={{
+        fontSize: 10,
+        padding: "2px 7px",
+        borderRadius: 6,
+        background: c.bg,
+        border: `0.5px solid ${c.border}`,
+        color: c.text,
+        fontWeight: 500,
+        fontFamily: "'DM Sans', sans-serif",
+      }}
+    >
+      {label}
+    </span>
+  );
+}
+
+function ToolPill({ label }) {
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        background: tokens.teal.bg,
+        border: `0.5px solid ${tokens.teal.border}`,
+        borderRadius: 6,
+        padding: "2px 8px",
+        fontSize: 10,
+        fontWeight: 600,
+        color: tokens.teal.text,
+        fontFamily: "'DM Sans', sans-serif",
+      }}
+    >
+      ⚙ {label}
+    </span>
+  );
+}
+
+function MetricCard({ value, label, change }) {
+  return (
+    <div
+      style={{
+        background: "var(--surface-secondary, #f7f7f5)",
+        borderRadius: 10,
+        padding: "10px 12px",
+        flex: 1,
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "'Syne', sans-serif",
+          fontSize: 22,
+          fontWeight: 700,
+          color: "var(--text-primary, #1a1a18)",
+          lineHeight: 1,
+        }}
+      >
+        {value}
+      </div>
+      <div
+        style={{
+          fontSize: 10,
+          color: "var(--text-muted, #888780)",
+          marginTop: 3,
+          textTransform: "uppercase",
+          letterSpacing: "0.06em",
+        }}
+      >
+        {label}
+      </div>
+      <div style={{ fontSize: 10, color: tokens.teal.mid, marginTop: 2, fontWeight: 500 }}>
+        {change}
+      </div>
+    </div>
+  );
+}
+
+function InteractionRow({ item, isNew }) {
+  const initials = item.doctor_name ? item.doctor_name.replace("Dr. ", "").slice(0, 2).toUpperCase() : "HP";
+  // Assign color based on id or name
+  const colors = ["teal", "blue", "amber", "coral"];
+  const color = colors[item.id % 4];
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        gap: 10,
+        padding: "10px 12px",
+        border: isNew
+          ? `0.5px solid ${tokens.teal.border}`
+          : "0.5px solid var(--border, rgba(0,0,0,0.12))",
+        borderRadius: 10,
+        background: isNew ? tokens.teal.bg : "var(--surface-secondary, #f7f7f5)",
+        transition: "all 0.3s ease",
+      }}
+    >
+      <Avatar initials={initials} color={color} size={34} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span
+            style={{
+              fontSize: 13,
+              fontWeight: 500,
+              color: "var(--text-primary, #1a1a18)",
+              fontFamily: "'DM Sans', sans-serif",
+            }}
+          >
+            {item.doctor_name}
+          </span>
+          <span style={{ fontSize: 10, color: "var(--text-muted, #888780)" }}>
+            {new Date(item.interaction_date).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+          </span>
+        </div>
+        <div style={{ fontSize: 10, color: "var(--text-muted, #888780)", marginTop: 1 }}>
+          {item.interaction_type}
+        </div>
+        <div
+          style={{
+            fontSize: 11,
+            color: "var(--text-secondary, #5F5E5A)",
+            marginTop: 4,
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {item.summary || item.notes}
+        </div>
+        <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
+          {item.products && item.products.split(',').map((p) => (
+            <Tag key={p} label={p.trim()} color="teal" />
+          ))}
+          {item.follow_up_date && <Tag label={`Follow-up: ${item.follow_up_date}`} color="amber" />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Chat Message ─────────────────────────────────────────────────────────────
+function ChatMessage({ msg }) {
+  const isUser = msg.role === "user";
+  return (
+    <div
+      style={{
+        display: "flex",
+        justifyContent: isUser ? "flex-end" : "flex-start",
+        marginBottom: 8,
+      }}
+    >
+      <div
+        style={{
+          maxWidth: "82%",
+          padding: "10px 13px",
+          borderRadius: 12,
+          fontSize: 13,
+          lineHeight: 1.55,
+          fontFamily: "'DM Sans', sans-serif",
+          background: isUser
+            ? "var(--surface-secondary, #f0efea)"
+            : "var(--surface-tertiary, #ebebea)",
+          border: isUser
+            ? "0.5px solid var(--border, rgba(0,0,0,0.12))"
+            : "0.5px solid var(--border-em, rgba(0,0,0,0.18))",
+          color: "var(--text-primary, #1a1a18)",
+        }}
+      >
+        <div
+          style={{
+            fontSize: 9,
+            fontWeight: 600,
+            letterSpacing: "0.07em",
+            textTransform: "uppercase",
+            marginBottom: 4,
+            color: isUser ? "var(--text-muted, #888780)" : tokens.teal.mid,
+            textAlign: isUser ? "right" : "left",
+          }}
+        >
+          {isUser ? "You" : "AI Assistant"}
+        </div>
+        {msg.content}
+        {msg.tools && msg.tools.length > 0 && (
+          <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 7 }}>
+            {msg.tools.map((t) => (
+              <ToolPill key={t} label={t} />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Topbar ───────────────────────────────────────────────────────────────────
+function Topbar({ activeTab, setActiveTab }) {
+  const tabs = ["Log Interaction", "Analytics", "Doctors", "Follow-ups"];
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        padding: "10px 20px",
+        background: "var(--surface-primary, #fff)",
+        borderBottom: "0.5px solid var(--border, rgba(0,0,0,0.12))",
+        flexShrink: 0,
+      }}
+    >
+      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+        <div
+          style={{
+            width: 9,
+            height: 9,
+            borderRadius: "50%",
+            background: tokens.teal.mid,
+          }}
+        />
+        <span
+          style={{
+            fontFamily: "'Syne', sans-serif",
+            fontSize: 14,
+            fontWeight: 700,
+            color: "var(--text-primary, #1a1a18)",
+            letterSpacing: "0.02em",
+          }}
+        >
+          HCP CRM
+        </span>
+      </div>
+
+      <div style={{ display: "flex", gap: 4 }}>
+        {tabs.map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            style={{
+              fontSize: 12,
+              padding: "5px 12px",
+              borderRadius: 8,
+              border: activeTab === tab ? "0.5px solid var(--border-em, rgba(0,0,0,0.2))" : "0.5px solid transparent",
+              background: activeTab === tab ? "var(--surface-secondary, #f0efea)" : "transparent",
+              color: activeTab === tab ? "var(--text-primary, #1a1a18)" : "var(--text-muted, #888780)",
+              cursor: "pointer",
+              fontWeight: activeTab === tab ? 500 : 400,
+              fontFamily: "'DM Sans', sans-serif",
+              transition: "all 0.15s",
+            }}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <div
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: tokens.teal.mid,
+          }}
+        />
+        <span style={{ fontSize: 11, color: "var(--text-muted, #888780)", fontFamily: "'DM Sans', sans-serif" }}>
+          Live sync
+        </span>
+        <div
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: "50%",
+            background: tokens.teal.bg,
+            border: `0.5px solid ${tokens.teal.border}`,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: 10,
+            fontWeight: 500,
+            color: tokens.teal.text,
+            fontFamily: "'DM Sans', sans-serif",
+          }}
+        >
+          MR
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Chat Panel ───────────────────────────────────────────────────────────────
+function ChatPanel({ messages, onSend, chatStatus }) {
+  const [input, setInput] = useState("");
+  const endRef = useRef(null);
+
+  useEffect(() => {
+    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  const handleSend = () => {
+    if (!input.trim() || chatStatus === 'loading') return;
+    onSend(input.trim());
+    setInput("");
+  };
+
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        background: "var(--surface-primary, #fff)",
+        borderRight: "0.5px solid var(--border, rgba(0,0,0,0.12))",
+      }}
+    >
+      <div
+        style={{
+          padding: "12px 16px 8px",
+          borderBottom: "0.5px solid var(--border, rgba(0,0,0,0.12))",
+        }}
+      >
+        <div
+          style={{
+            fontFamily: "'Syne', sans-serif",
+            fontSize: 10,
+            fontWeight: 600,
+            color: "var(--text-muted, #888780)",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+          }}
+        >
+          AI Assistant
+        </div>
+      </div>
+
+      <div
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: "14px 14px 8px",
+        }}
+      >
+        {messages.map((msg, i) => (
+          <ChatMessage key={i} msg={msg} />
+        ))}
+        {chatStatus === 'loading' && (
+           <div style={{ display: "flex", gap: 3, marginBottom: 8 }}>
+             <div style={{ padding: "10px 13px", borderRadius: 12, background: "var(--surface-tertiary, #ebebea)", fontSize: 13 }}>
+                <span className="animate-pulse">Thinking...</span>
+             </div>
+           </div>
+        )}
+        <div ref={endRef} />
+      </div>
+
+      <div
+        style={{
+          padding: "10px 14px",
+          borderTop: "0.5px solid var(--border, rgba(0,0,0,0.12))",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            background: "var(--surface-secondary, #f0efea)",
+            border: "0.5px solid var(--border-em, rgba(0,0,0,0.18))",
+            borderRadius: 10,
+            padding: "8px 12px",
+          }}
+        >
+          <input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleSend()}
+            placeholder="Log a meeting or ask about a doctor..."
+            style={{
+              flex: 1,
+              background: "transparent",
+              border: "none",
+              outline: "none",
+              fontSize: 13,
+              color: "var(--text-primary, #1a1a18)",
+              fontFamily: "'DM Sans', sans-serif",
+            }}
+          />
+          <button
+            onClick={handleSend}
+            disabled={chatStatus === 'loading'}
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 8,
+              background: tokens.teal.mid,
+              border: "none",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: 13,
+              color: "#fff",
+              flexShrink: 0,
+              transition: "opacity 0.15s",
+              opacity: chatStatus === 'loading' ? 0.5 : 1,
+            }}
+          >
+            ↑
+          </button>
+        </div>
+        <div
+          style={{
+            marginTop: 6,
+            display: "flex",
+            gap: 6,
+            flexWrap: "wrap",
+          }}
+        >
+          {[
+            "I met Dr. Sharma today...",
+            "What are Dr. Kumar's concerns?",
+            "Log a call with Dr. Patel",
+          ].map((s) => (
+            <button
+              key={s}
+              onClick={() => setInput(s)}
+              style={{
+                fontSize: 10,
+                padding: "3px 8px",
+                borderRadius: 6,
+                border: "0.5px solid var(--border, rgba(0,0,0,0.12))",
+                background: "transparent",
+                color: "var(--text-muted, #888780)",
+                cursor: "pointer",
+                fontFamily: "'DM Sans', sans-serif",
+              }}
+            >
+              {s}
+            </button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Dashboard Panel ──────────────────────────────────────────────────────────
+function DashboardPanel({ interactions, newestId }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        background: "var(--surface-primary, #fff)",
+      }}
+    >
+      <div
+        style={{
+          padding: "12px 16px 8px",
+          borderBottom: "0.5px solid var(--border, rgba(0,0,0,0.12))",
+        }}
+      >
+        <div
+          style={{
+            fontFamily: "'Syne', sans-serif",
+            fontSize: 10,
+            fontWeight: 600,
+            color: "var(--text-muted, #888780)",
+            textTransform: "uppercase",
+            letterSpacing: "0.08em",
+          }}
+        >
+          Interaction Dashboard
+        </div>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          gap: 8,
+          padding: "10px 14px",
+          borderBottom: "0.5px solid var(--border, rgba(0,0,0,0.12))",
+        }}
+      >
+        <MetricCard value={interactions.length} label="Total logs" change="+1 today" />
+        <MetricCard value={interactions.filter(i => i.follow_up_date).length} label="Follow-ups" change="Active" />
+        <MetricCard value={new Set(interactions.map(i => i.doctor_name)).size} label="Doctors" change="Active" />
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "10px 14px 6px",
+        }}
+      >
+        <span
+          style={{
+            fontFamily: "'Syne', sans-serif",
+            fontSize: 10,
+            fontWeight: 600,
+            color: "var(--text-muted, #888780)",
+            textTransform: "uppercase",
+            letterSpacing: "0.07em",
+          }}
+        >
+          Recent Interactions
+        </span>
+        <span
+          style={{
+            fontSize: 11,
+            color: tokens.teal.mid,
+            fontWeight: 500,
+            cursor: "pointer",
+            fontFamily: "'DM Sans', sans-serif",
+          }}
+        >
+          View all →
+        </span>
+      </div>
+
+      <div
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: "0 14px 10px",
+          display: "flex",
+          flexDirection: "column",
+          gap: 6,
+        }}
+      >
+        {[...interactions].reverse().map((item) => (
+          <InteractionRow key={item.id} item={item} isNew={item.id === newestId} />
+        ))}
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 5,
+          padding: "6px 14px 10px",
+          borderTop: "0.5px solid var(--border, rgba(0,0,0,0.12))",
+        }}
+      >
+        <div
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: tokens.teal.mid,
+          }}
+        />
+        <span
+          style={{
+            fontSize: 10,
+            color: tokens.teal.mid,
+            fontWeight: 500,
+            fontFamily: "'DM Sans', sans-serif",
+          }}
+        >
+          {window.location.hostname === 'localhost' ? 'WebSocket connected' : 'Cloud sync active'}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ─── Root App ─────────────────────────────────────────────────────────────────
+export default function App() {
   const dispatch = useDispatch();
   const interactions = useSelector((state) => state.interactions.list);
-  const status = useSelector((state) => state.interactions.status);
   const chatHistory = useSelector((state) => state.interactions.chatHistory);
   const chatStatus = useSelector((state) => state.interactions.chatStatus);
-  const extractedData = useSelector((state) => state.interactions.extractedData);
-  const chatEndRef = useRef(null);
   
-  const [formData, setFormData] = useState({
-    doctor_name: '',
-    interaction_type: 'In-person',
-    notes: '',
-    products: '',
-    follow_up_date: ''
-  });
-  
-  const [chatInput, setChatInput] = useState('');
-  const [leftTab, setLeftTab] = useState('chat'); // 'chat' or 'history'
-  
+  const [activeTab, setActiveTab] = useState("Log Interaction");
+  const [newestId, setNewestId] = useState(null);
+
   useEffect(() => {
     dispatch(fetchInteractions());
 
     // WebSockets are not supported on Vercel Serverless Functions.
-    // We only enable them in development or if a specific WS URL is provided.
     const wsUrl = import.meta.env.VITE_WS_URL || (import.meta.env.DEV ? 'ws://localhost:8000/ws' : null);
     
     if (wsUrl) {
@@ -41,324 +636,54 @@ function App() {
     }
   }, [dispatch]);
 
-  useEffect(() => {
-    if (extractedData) {
-      setFormData(prev => {
-        let matchedType = prev.interaction_type;
-        if (extractedData.interaction_type) {
-          const t = extractedData.interaction_type.toLowerCase();
-          if (t.includes('call')) matchedType = 'Call';
-          else if (t.includes('email')) matchedType = 'Email';
-          else if (t.includes('virtual')) matchedType = 'Virtual Meeting';
-          else matchedType = 'In-person';
-        }
-        
-        return {
-          ...prev,
-          doctor_name: extractedData.doctor_name || prev.doctor_name,
-          notes: extractedData.notes || prev.notes,
-          products: extractedData.products_discussed ? extractedData.products_discussed.join(', ') : prev.products,
-          follow_up_date: extractedData.follow_up_date || prev.follow_up_date,
-          interaction_type: matchedType
-        };
-      });
-    }
-  }, [extractedData]);
-
-  useEffect(() => {
-    if (leftTab === 'chat') {
-      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
-  }, [chatHistory, leftTab]);
-
-  const handleFormSubmit = async (e) => {
-    e.preventDefault();
-    await dispatch(addInteraction(formData));
-    dispatch(fetchInteractions()); 
-    setFormData({ doctor_name: '', interaction_type: 'In-person', notes: '', products: '', follow_up_date: '' });
-    setLeftTab('history'); 
-  };
-
-  const handleChatSubmit = async (e) => {
-    e.preventDefault();
-    if (!chatInput.trim()) return;
+  const handleSend = async (text) => {
+    dispatch(addChatUserMessage(text));
+    const result = await dispatch(chatWithAgent({ message: text, thread_id: 'default' }));
     
-    dispatch(addChatUserMessage(chatInput));
-    await dispatch(chatWithAgent({ message: chatInput, thread_id: 'default' }));
-    dispatch(fetchInteractions());
-    setChatInput('');
+    if (result.payload && result.payload.extracted_data) {
+       dispatch(fetchInteractions());
+       // Find the newest interaction if it was just created
+       // This is a bit tricky since we don't have the ID yet, but fetchInteractions will update the list
+    }
   };
 
   return (
-    <div className="h-screen w-full font-inter text-slate-800 flex flex-col bg-slate-50 overflow-hidden">
-      <header className="bg-white border-b border-slate-200 px-8 py-4 flex justify-between items-center shadow-sm shrink-0">
-        <div className="flex items-center gap-4">
-          <div className="bg-indigo-600 p-2.5 rounded-xl shadow-sm flex items-center justify-center">
-            <Activity size={24} className="text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight text-slate-800 flex items-center gap-2">
-              <span>AI-First CRM</span> 
-              <span className="font-light text-slate-400">| HCP Module</span>
-            </h1>
-          </div>
+    <div
+      style={{
+        fontFamily: "'DM Sans', sans-serif",
+        background: "var(--color-background-tertiary, #f4f3ef)",
+        minHeight: "100vh",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      {/* App Shell */}
+      <div
+        style={{
+          maxWidth: 1280,
+          margin: "0 auto",
+          width: "100%",
+          height: "100vh",
+          display: "flex",
+          flexDirection: "column",
+          background: "var(--surface-primary, #fff)",
+          boxShadow: "0 0 0 0.5px rgba(0,0,0,0.12)",
+        }}
+      >
+        <Topbar activeTab={activeTab} setActiveTab={setActiveTab} />
+
+        <div
+          style={{
+            flex: 1,
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr",
+            overflow: "hidden",
+          }}
+        >
+          <ChatPanel messages={chatHistory} onSend={handleSend} chatStatus={chatStatus} />
+          <DashboardPanel interactions={interactions} newestId={newestId} />
         </div>
-      </header>
-
-      <main className="flex-grow p-6 w-full max-w-[1800px] mx-auto overflow-hidden flex gap-6">
-        
-        {/* LEFT COLUMN: AI CHAT or HISTORY */}
-        <div className="w-2/3 flex flex-col gap-4 h-full overflow-hidden">
-          {/* Tab Selection */}
-          <div className="flex bg-white rounded-xl p-1 shadow-sm border border-slate-200 shrink-0 w-fit">
-            <button 
-              onClick={() => setLeftTab('chat')}
-              className={`px-6 py-2.5 rounded-lg flex items-center gap-2 font-bold text-[14px] transition-all ${leftTab === 'chat' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
-            >
-              <MessageSquare size={18} /> AI Assistant
-            </button>
-            <button 
-              onClick={() => setLeftTab('history')}
-              className={`px-6 py-2.5 rounded-lg flex items-center gap-2 font-bold text-[14px] transition-all ${leftTab === 'history' ? 'bg-indigo-50 text-indigo-700 shadow-sm' : 'text-slate-500 hover:text-slate-700 hover:bg-slate-50'}`}
-            >
-              <LayoutDashboard size={18} /> Dashboard
-            </button>
-          </div>
-
-          <div className="clean-panel rounded-2xl flex flex-col flex-1 overflow-hidden shadow-md border-slate-200">
-            {leftTab === 'chat' ? (
-              // AI Chat Interface
-              <>
-                <div className="p-5 border-b border-indigo-500 flex items-center justify-between bg-indigo-600 text-white shrink-0">
-                  <div className="flex items-center gap-3">
-                    <Bot className="text-indigo-100" size={24} />
-                    <h2 className="font-bold text-lg tracking-wide">Intelligent Field Assistant</h2>
-                  </div>
-                  <span className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest bg-indigo-700 px-3 py-1.5 rounded-md border border-indigo-500 shadow-inner">Online</span>
-                </div>
-
-                <div className="flex-1 p-6 overflow-y-auto flex flex-col gap-6 bg-slate-50/50">
-                  {chatHistory.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-500">
-                      <div className="bg-indigo-100 p-6 rounded-full mb-6 shadow-inner border border-indigo-200">
-                        <Bot size={48} className="text-indigo-600" />
-                      </div>
-                      <h3 className="text-xl font-bold text-slate-800 mb-2">Ready to assist</h3>
-                      <p className="text-sm max-w-[350px] text-center leading-relaxed text-slate-500 font-medium">
-                        Log a meeting, correct a previous entry, or ask for a summary of a doctor's history. Just chat naturally.
-                      </p>
-                    </div>
-                  ) : (
-                    chatHistory.map((msg, idx) => (
-                      <div key={idx} className={`flex gap-3 max-w-[85%] ${msg.role === 'user' ? 'self-end flex-row-reverse' : 'self-start'}`}>
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm ${msg.role === 'user' ? 'bg-indigo-600' : 'bg-white border border-slate-200'}`}>
-                          {msg.role === 'user' ? <User size={18} className="text-white" /> : <Bot size={18} className="text-indigo-600" />}
-                        </div>
-                        <div className={`p-4 rounded-2xl text-[14px] font-medium leading-relaxed shadow-sm ${
-                          msg.role === 'user' 
-                            ? 'bg-indigo-600 text-white rounded-tr-none' 
-                            : 'bg-white border border-slate-200 text-slate-700 rounded-tl-none'
-                        }`}>
-                          {msg.content}
-                        </div>
-                      </div>
-                    ))
-                  )}
-                  {chatStatus === 'loading' && (
-                    <div className="flex gap-3 max-w-[85%] self-start">
-                      <div className="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center shadow-sm">
-                         <Bot size={18} className="text-indigo-600" />
-                      </div>
-                      <div className="p-5 bg-white border border-slate-200 rounded-2xl rounded-tl-none shadow-sm flex gap-2 items-center">
-                        <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce"></div>
-                        <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0.15s' }}></div>
-                        <div className="w-2 h-2 bg-indigo-400 rounded-full animate-bounce" style={{ animationDelay: '0.3s' }}></div>
-                      </div>
-                    </div>
-                  )}
-                  <div ref={chatEndRef} />
-                </div>
-                
-                <div className="p-5 border-t border-slate-200 bg-white shrink-0">
-                  <form onSubmit={handleChatSubmit} className="flex gap-3 relative">
-                    <input 
-                      type="text" 
-                      value={chatInput}
-                      onChange={(e) => setChatInput(e.target.value)}
-                      className="flex-grow p-4 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-[15px] text-slate-800 placeholder-slate-400 shadow-inner font-medium"
-                      placeholder="Type a message to your AI assistant..."
-                    />
-                    <button 
-                      type="submit" 
-                      disabled={chatStatus === 'loading'}
-                      className="bg-indigo-600 text-white px-8 rounded-xl hover:bg-indigo-700 transition-all transform hover:scale-[1.02] disabled:opacity-50 disabled:transform-none flex items-center justify-center shadow-md gap-2 font-bold"
-                    >
-                      <Send size={18} /> Send
-                    </button>
-                  </form>
-                </div>
-              </>
-            ) : (
-              // History Dashboard Interface
-              <>
-                <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50/80 shrink-0">
-                  <div className="flex items-center gap-3">
-                    <History className="text-emerald-500" size={24} />
-                    <h2 className="font-bold text-lg text-slate-800 tracking-wide">Interaction Log</h2>
-                  </div>
-                  <span className="bg-emerald-50 text-emerald-600 text-xs font-bold px-3 py-1.5 rounded-lg border border-emerald-200 shadow-sm">
-                    Total Logs: {interactions.length}
-                  </span>
-                </div>
-                <div className="p-6 overflow-y-auto flex-1 bg-slate-50/50">
-                  {interactions && interactions.length === 0 ? (
-                    <div className="h-full flex flex-col items-center justify-center text-slate-400 text-sm font-medium">
-                      {status === 'loading' ? 'Loading history...' : 'No interactions logged yet.'}
-                    </div>
-                  ) : (
-                    <div className="flex flex-col gap-5">
-                      {[...interactions].reverse().map((interaction) => (
-                        <div key={interaction.id} className="border border-slate-200 rounded-xl p-6 hover:border-indigo-300 hover:shadow-lg transition-all bg-white shadow-sm group">
-                          <div className="flex justify-between items-start mb-5 border-b border-slate-100 pb-4">
-                            <div>
-                              <h3 className="font-extrabold text-slate-800 text-xl flex items-center gap-3">
-                                {interaction.doctor_name}
-                                <span className="bg-slate-100 text-slate-400 text-[10px] uppercase tracking-widest px-2.5 py-1 rounded-md font-bold group-hover:bg-indigo-50 group-hover:text-indigo-400 transition-colors">#{interaction.id}</span>
-                              </h3>
-                              <div className="text-sm font-medium text-slate-500 mt-2 flex gap-3 items-center">
-                                <span className="text-slate-600 font-semibold">{new Date(interaction.interaction_date).toLocaleDateString()}</span>
-                                <span className="w-1.5 h-1.5 bg-slate-300 rounded-full"></span>
-                                <span className="text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded text-xs border border-indigo-100">{interaction.interaction_type}</span>
-                              </div>
-                            </div>
-                            {interaction.follow_up_date && (
-                              <div className="text-right">
-                                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-1.5">Follow-up</span>
-                                <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-md border border-emerald-200 shadow-sm">{interaction.follow_up_date}</span>
-                              </div>
-                            )}
-                          </div>
-                          
-                          <div className="grid grid-cols-2 gap-6">
-                            <div className="pr-2">
-                              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block mb-2">Original Notes</span>
-                              <p className="text-[14px] text-slate-600 leading-relaxed font-medium">{interaction.notes}</p>
-                              {interaction.products && (
-                                <div className="mt-4">
-                                  <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-md inline-block border border-indigo-200 shadow-sm">{interaction.products}</span>
-                                </div>
-                              )}
-                            </div>
-                            
-                            <div className="flex flex-col gap-4">
-                              {interaction.summary && interaction.summary !== "Summary generation failed." && (
-                                <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl relative overflow-hidden group-hover:border-emerald-200 group-hover:bg-emerald-50/30 transition-colors">
-                                  <div className="absolute left-0 top-0 w-1 h-full bg-emerald-400 opacity-50 group-hover:opacity-100 transition-opacity"></div>
-                                  <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest block mb-2">AI Summary</span>
-                                  <p className="text-[13px] text-slate-700 font-medium leading-relaxed">{interaction.summary}</p>
-                                </div>
-                              )}
-                              {interaction.action_items && interaction.action_items !== "Action items generation failed." && (
-                                <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl relative overflow-hidden group-hover:border-amber-200 group-hover:bg-amber-50/30 transition-colors">
-                                  <div className="absolute left-0 top-0 w-1 h-full bg-amber-400 opacity-50 group-hover:opacity-100 transition-opacity"></div>
-                                  <span className="text-[10px] font-bold text-amber-600 uppercase tracking-widest block mb-2">Extracted Actions</span>
-                                  <p className="text-[13px] text-slate-700 font-medium leading-relaxed whitespace-pre-line">{interaction.action_items}</p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* RIGHT COLUMN: MANUAL FORM */}
-        <div className="w-1/3 clean-panel rounded-2xl flex flex-col h-full overflow-hidden shrink-0 shadow-lg border border-slate-200">
-          <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-white shrink-0">
-            <div className="flex items-center gap-3">
-              <ClipboardList className="text-slate-800" size={24} />
-              <h2 className="font-bold text-lg text-slate-800 tracking-wide">Manual Entry</h2>
-            </div>
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200 shadow-inner">Fallback Tool</span>
-          </div>
-          
-          <div className="p-6 overflow-y-auto flex-grow bg-slate-50/50">
-            <form onSubmit={handleFormSubmit} className="flex flex-col gap-5 h-full">
-              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-4">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">Doctor Name</label>
-                  <input 
-                    type="text" 
-                    value={formData.doctor_name}
-                    onChange={(e) => setFormData({...formData, doctor_name: e.target.value})}
-                    className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-sm text-slate-800 font-medium shadow-inner"
-                    placeholder="e.g., Dr. Jane Smith"
-                    required
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">Type</label>
-                    <select 
-                      value={formData.interaction_type}
-                      onChange={(e) => setFormData({...formData, interaction_type: e.target.value})}
-                      className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-sm text-slate-800 font-medium appearance-none shadow-inner"
-                    >
-                      <option>In-person</option>
-                      <option>Call</option>
-                      <option>Email</option>
-                      <option>Virtual Meeting</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">Follow-up</label>
-                    <input 
-                      type="text" 
-                      value={formData.follow_up_date}
-                      onChange={(e) => setFormData({...formData, follow_up_date: e.target.value})}
-                      className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-sm text-slate-800 font-medium shadow-inner"
-                      placeholder="e.g., Next Mon"
-                    />
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">Products</label>
-                  <input 
-                    type="text" 
-                    value={formData.products}
-                    onChange={(e) => setFormData({...formData, products: e.target.value})}
-                    className="w-full p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-sm text-slate-800 font-medium shadow-inner"
-                    placeholder="e.g., Insulin"
-                  />
-                </div>
-              </div>
-              
-              <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col flex-grow">
-                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-widest mb-2">Interaction Notes</label>
-                <textarea 
-                  value={formData.notes}
-                  onChange={(e) => setFormData({...formData, notes: e.target.value})}
-                  className="w-full flex-grow p-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none transition-all text-[15px] text-slate-800 resize-none min-h-[150px] font-medium shadow-inner leading-relaxed"
-                  placeholder="Summarize the key points of the meeting here..."
-                  required
-                />
-              </div>
-
-              <button type="submit" className="w-full bg-slate-800 hover:bg-black text-white p-4 rounded-xl font-bold flex justify-center items-center gap-2 transition-all shadow-md shrink-0 mt-auto hover:shadow-lg transform hover:-translate-y-0.5">
-                <Save size={18} /> Save Entry Manually
-              </button>
-            </form>
-          </div>
-        </div>
-
-      </main>
+      </div>
     </div>
   );
 }
-
-export default App;

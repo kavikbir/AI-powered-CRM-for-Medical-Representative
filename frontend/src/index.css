@@ -2,20 +2,50 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --color-background-primary: #ffffff;
+  --color-background-secondary: #f0efea;
+  --color-background-tertiary: #f4f3ef;
+  
+  --surface-primary: #ffffff;
+  --surface-secondary: #f7f7f5;
+  --surface-tertiary: #ebebea;
+  
+  --color-text-primary: #1a1a18;
+  --color-text-secondary: #5F5E5A;
+  --color-text-tertiary: #888780;
+  
+  --text-primary: #1a1a18;
+  --text-secondary: #5F5E5A;
+  --text-muted: #888780;
+  
+  --color-border-primary: rgba(0,0,0,0.2);
+  --color-border-secondary: rgba(0,0,0,0.18);
+  --color-border-tertiary: rgba(0,0,0,0.12);
+  
+  --border: rgba(0,0,0,0.12);
+  --border-em: rgba(0,0,0,0.18);
+  
+  --border-radius-sm: 4px;
+  --border-radius-md: 8px;
+  --border-radius-lg: 12px;
+}
+
 * {
   box-sizing: border-box;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 html, body, #root {
   height: 100%;
   margin: 0;
   padding: 0;
-  font-family: 'Inter', sans-serif;
+  font-family: 'DM Sans', sans-serif;
+  background-color: var(--color-background-tertiary);
 }
 
 body {
-  background-color: #f8fafc;
-  color: #1e293b;
+  color: var(--color-text-primary);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -29,21 +59,9 @@ body {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: rgba(148, 163, 184, 0.45);
+  background: rgba(0, 0, 0, 0.1);
   border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: rgba(99, 102, 241, 0.5);
-}
-
-/* Clean Panel */
-.clean-panel {
-  background: #ffffff;
-  border: 1px solid #e2e8f0;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
-}
-
-/* Smooth hover transition */
-* {
-  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  background: rgba(0, 0, 0, 0.2);
 }
