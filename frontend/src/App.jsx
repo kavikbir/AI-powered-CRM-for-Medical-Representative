@@ -26,13 +26,19 @@ function App() {
   useEffect(() => {
     dispatch(fetchInteractions());
 
-    const socket = new WebSocket('ws://localhost:8000/ws');
-    socket.onmessage = (event) => {
-      if (event.data === 'update') {
-        dispatch(fetchInteractions());
-      }
-    };
-    return () => socket.close();
+    // WebSockets are not supported on Vercel Serverless Functions.
+    // We only enable them in development or if a specific WS URL is provided.
+    const wsUrl = import.meta.env.VITE_WS_URL || (import.meta.env.DEV ? 'ws://localhost:8000/ws' : null);
+    
+    if (wsUrl) {
+      const socket = new WebSocket(wsUrl);
+      socket.onmessage = (event) => {
+        if (event.data === 'update') {
+          dispatch(fetchInteractions());
+        }
+      };
+      return () => socket.close();
+    }
   }, [dispatch]);
 
   useEffect(() => {
