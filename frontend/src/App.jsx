@@ -382,7 +382,7 @@ function ChatPanel({ messages, onSend, chatStatus }) {
           padding: "14px 14px 8px",
         }}
       >
-        {messages.map((msg, i) => (
+        {Array.isArray(messages) && messages.map((msg, i) => (
           <ChatMessage key={i} msg={msg} />
         ))}
         {chatStatus === 'loading' && (
@@ -525,9 +525,9 @@ function DashboardPanel({ interactions, newestId }) {
           borderBottom: "0.5px solid var(--border, rgba(0,0,0,0.12))",
         }}
       >
-        <MetricCard value={(interactions || []).length} label="Total logs" change="+1 today" />
-        <MetricCard value={(interactions || []).filter(i => i && i.follow_up_date).length} label="Follow-ups" change="Active" />
-        <MetricCard value={new Set((interactions || []).map(i => i ? i.doctor_name : '')).size} label="Doctors" change="Active" />
+        <MetricCard value={Array.isArray(interactions) ? interactions.length : 0} label="Total logs" change="+1 today" />
+        <MetricCard value={Array.isArray(interactions) ? interactions.filter(i => i && i.follow_up_date).length : 0} label="Follow-ups" change="Active" />
+        <MetricCard value={new Set(Array.isArray(interactions) ? interactions.map(i => i ? i.doctor_name : '') : []).size} label="Doctors" change="Active" />
       </div>
 
       <div
@@ -573,7 +573,7 @@ function DashboardPanel({ interactions, newestId }) {
           gap: 6,
         }}
       >
-        {[...(interactions || [])].reverse().map((item) => (
+        {Array.isArray(interactions) && [...interactions].reverse().map((item) => (
           item && <InteractionRow key={item.id} item={item} isNew={item.id === newestId} />
         ))}
       </div>
