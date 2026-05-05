@@ -39,6 +39,9 @@ const interactionSlice = createSlice({
         state.list = action.payload;
         state.status = 'succeeded';
       })
+      .addCase(fetchInteractions.rejected, (state) => {
+        state.status = 'failed';
+      })
       .addCase(addInteraction.fulfilled, (state, action) => {
         state.list.push(action.payload);
       })
@@ -49,6 +52,10 @@ const interactionSlice = createSlice({
         state.chatHistory.push({ role: 'agent', content: action.payload.response });
         state.extractedData = action.payload.extracted_data;
         state.chatStatus = 'succeeded';
+      })
+      .addCase(chatWithAgent.rejected, (state) => {
+        state.chatHistory.push({ role: 'agent', content: "Sorry, I'm having trouble connecting to the server. Please check your connection." });
+        state.chatStatus = 'failed';
       });
   },
 });

@@ -41,7 +41,10 @@ manager = ConnectionManager()
 
 models.Base.metadata.create_all(bind=database.engine)
 
-app = FastAPI(title="AI-First CRM HCP Module")
+app = FastAPI(
+    title="AI-First CRM HCP Module",
+    root_path="/api"
+)
 
 # Configure CORS for frontend access
 app.add_middleware(
