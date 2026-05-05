@@ -118,6 +118,7 @@ function MetricCard({ value, label, change }) {
 }
 
 function InteractionRow({ item, isNew }) {
+  if (!item) return null;
   const initials = item.doctor_name ? item.doctor_name.replace("Dr. ", "").slice(0, 2).toUpperCase() : "HP";
   // Assign color based on id or name
   const colors = ["teal", "blue", "amber", "coral"];
@@ -524,9 +525,9 @@ function DashboardPanel({ interactions, newestId }) {
           borderBottom: "0.5px solid var(--border, rgba(0,0,0,0.12))",
         }}
       >
-        <MetricCard value={interactions.length} label="Total logs" change="+1 today" />
-        <MetricCard value={interactions.filter(i => i.follow_up_date).length} label="Follow-ups" change="Active" />
-        <MetricCard value={new Set(interactions.map(i => i.doctor_name)).size} label="Doctors" change="Active" />
+        <MetricCard value={(interactions || []).length} label="Total logs" change="+1 today" />
+        <MetricCard value={(interactions || []).filter(i => i && i.follow_up_date).length} label="Follow-ups" change="Active" />
+        <MetricCard value={new Set((interactions || []).map(i => i ? i.doctor_name : '')).size} label="Doctors" change="Active" />
       </div>
 
       <div
@@ -572,8 +573,8 @@ function DashboardPanel({ interactions, newestId }) {
           gap: 6,
         }}
       >
-        {[...interactions].reverse().map((item) => (
-          <InteractionRow key={item.id} item={item} isNew={item.id === newestId} />
+        {[...(interactions || [])].reverse().map((item) => (
+          item && <InteractionRow key={item.id} item={item} isNew={item.id === newestId} />
         ))}
       </div>
 
@@ -620,6 +621,7 @@ export default function App() {
   const [newestId, setNewestId] = useState(null);
 
   useEffect(() => {
+    console.log("App starting... interactions:", interactions);
     dispatch(fetchInteractions());
 
     // WebSockets are not supported on Vercel Serverless Functions.
