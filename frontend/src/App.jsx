@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchInteractions, addInteraction, chatWithAgent, addChatUserMessage } from './features/interactionSlice';
+import { fetchInteractions, chatWithAgent, addChatUserMessage } from './features/interactionSlice';
 
 // ─── Design Tokens ──────────────────────────────────────────────────────────
 const tokens = {
@@ -121,7 +121,7 @@ function InteractionRow({ item, isNew }) {
   const initials = item.doctor_name ? item.doctor_name.replace("Dr. ", "").slice(0, 2).toUpperCase() : "HP";
   // Assign color based on id or name
   const colors = ["teal", "blue", "amber", "coral"];
-  const color = colors[item.id % 4];
+  const color = colors[(typeof item.id === 'number' ? item.id : 0) % 4];
 
   return (
     <div
@@ -151,7 +151,7 @@ function InteractionRow({ item, isNew }) {
             {item.doctor_name}
           </span>
           <span style={{ fontSize: 10, color: "var(--text-muted, #888780)" }}>
-            {new Date(item.interaction_date).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+            {item.interaction_date ? new Date(item.interaction_date).toLocaleDateString([], { month: 'short', day: 'numeric' }) : 'Recent'}
           </span>
         </div>
         <div style={{ fontSize: 10, color: "var(--text-muted, #888780)", marginTop: 1 }}>
@@ -170,7 +170,7 @@ function InteractionRow({ item, isNew }) {
           {item.summary || item.notes}
         </div>
         <div style={{ display: "flex", gap: 4, marginTop: 6, flexWrap: "wrap" }}>
-          {item.products && item.products.split(',').map((p) => (
+          {item.products && typeof item.products === 'string' && item.products.split(',').map((p) => (
             <Tag key={p} label={p.trim()} color="teal" />
           ))}
           {item.follow_up_date && <Tag label={`Follow-up: ${item.follow_up_date}`} color="amber" />}
