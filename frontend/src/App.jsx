@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
-import { fetchInteractions, chatWithAgent, addChatUserMessage } from './features/interactionSlice';
+import { fetchInteractions, chatWithAgent, addChatUserMessage, addInteraction } from './features/interactionSlice';
 
 // ─── Design Tokens ──────────────────────────────────────────────────────────
 const tokens = {
@@ -120,12 +120,12 @@ function MetricCard({ value, label, change }) {
 function InteractionRow({ item, isNew }) {
   if (!item) return null;
   const initials = item.doctor_name ? item.doctor_name.replace("Dr. ", "").slice(0, 2).toUpperCase() : "HP";
-  // Assign color based on id or name
   const colors = ["teal", "blue", "amber", "coral"];
   const color = colors[(typeof item.id === 'number' ? item.id : 0) % 4];
 
   return (
     <div
+      className={`interaction-row animate-fade-in`}
       style={{
         display: "flex",
         gap: 10,
@@ -135,7 +135,7 @@ function InteractionRow({ item, isNew }) {
           : "0.5px solid var(--border, rgba(0,0,0,0.12))",
         borderRadius: 10,
         background: isNew ? tokens.teal.bg : "var(--surface-secondary, #f7f7f5)",
-        transition: "all 0.3s ease",
+        cursor: "pointer"
       }}
     >
       <Avatar initials={initials} color={color} size={34} />
@@ -186,6 +186,7 @@ function ChatMessage({ msg }) {
   const isUser = msg.role === "user";
   return (
     <div
+      className="animate-fade-in"
       style={{
         display: "flex",
         justifyContent: isUser ? "flex-end" : "flex-start",
@@ -240,14 +241,17 @@ function Topbar({ activeTab, setActiveTab }) {
   const tabs = ["Log Interaction", "Analytics", "Doctors", "Follow-ups"];
   return (
     <div
+      className="glass"
       style={{
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
         padding: "10px 20px",
-        background: "var(--surface-primary, #fff)",
         borderBottom: "0.5px solid var(--border, rgba(0,0,0,0.12))",
         flexShrink: 0,
+        position: "sticky",
+        top: 0,
+        zIndex: 100,
       }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
@@ -351,6 +355,8 @@ function ChatPanel({ messages, onSend, chatStatus }) {
         display: "flex",
         flexDirection: "column",
         height: "100%",
+        minHeight: 0,
+        overflow: "hidden",
         background: "var(--surface-primary, #fff)",
         borderRight: "0.5px solid var(--border, rgba(0,0,0,0.12))",
       }}
@@ -376,6 +382,7 @@ function ChatPanel({ messages, onSend, chatStatus }) {
       </div>
 
       <div
+        className="custom-scroll scroll-smooth"
         style={{
           flex: 1,
           overflowY: "auto",
@@ -430,6 +437,7 @@ function ChatPanel({ messages, onSend, chatStatus }) {
           <button
             onClick={handleSend}
             disabled={chatStatus === 'loading'}
+            className="btn-primary"
             style={{
               width: 28,
               height: 28,
@@ -482,6 +490,184 @@ function ChatPanel({ messages, onSend, chatStatus }) {
           ))}
         </div>
       </div>
+    </div>
+  );
+}
+// ─── Manual Form ──────────────────────────────────────────────────────────────
+function ManualForm({ onSave, extractedData }) {
+  const [formData, setFormData] = useState({
+    doctor_name: "",
+    interaction_type: "In-person",
+    notes: "",
+    products: "",
+    follow_up_date: ""
+  });
+  const [isAiFilled, setIsAiFilled] = useState(false);
+
+  // Auto-fill form when AI extracts data from chat
+  useEffect(() => {
+    if (extractedData && Object.keys(extractedData).length > 0) {
+      setFormData(prev => ({
+        doctor_name: extractedData.doctor_name || prev.doctor_name,
+        interaction_type: extractedData.interaction_type || prev.interaction_type,
+        notes: extractedData.notes || prev.notes,
+        products: Array.isArray(extractedData.products_discussed)
+          ? extractedData.products_discussed.join(", ")
+          : (extractedData.products || prev.products),
+        follow_up_date: extractedData.follow_up_date || prev.follow_up_date
+      }));
+      setIsAiFilled(true);
+    }
+  }, [extractedData]);
+
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!formData.doctor_name) return;
+    onSave(formData);
+    setFormData({
+      doctor_name: "",
+      interaction_type: "In-person",
+      notes: "",
+      products: "",
+      follow_up_date: ""
+    });
+    setIsAiFilled(false);
+  };
+
+  return (
+    <div
+      className="custom-scroll scroll-smooth"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        minHeight: 0,
+        background: "var(--surface-primary, #fff)",
+        padding: "20px",
+        overflowY: "auto",
+        borderLeft: "0.5px solid var(--border, rgba(0,0,0,0.12))",
+        gap: "16px"
+      }}
+    >
+      <div
+        style={{
+          fontFamily: "'Syne', sans-serif",
+          fontSize: 10,
+          fontWeight: 600,
+          color: "var(--text-muted, #888780)",
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
+        }}
+      >
+        Manual Log Entry
+      </div>
+
+      {isAiFilled && (
+        <div
+          className="animate-fade-in"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            padding: "8px 12px",
+            borderRadius: 10,
+            background: tokens.teal.bg,
+            border: `0.5px solid ${tokens.teal.border}`,
+            fontSize: 11,
+            color: tokens.teal.text,
+            fontWeight: 500,
+          }}
+        >
+          <span style={{ fontSize: 14 }}>✨</span>
+          AI extracted — review & save or edit fields below
+        </div>
+      )}
+      
+      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        <div className="animate-fade-in" style={{ animationDelay: "0.1s" }}>
+          <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted, #888780)", display: "block", marginBottom: "6px" }}>DOCTOR NAME</label>
+          <input
+            name="doctor_name"
+            value={formData.doctor_name}
+            onChange={handleChange}
+            placeholder="e.g. Dr. Smith"
+            style={{ width: "100%", padding: "10px 12px", borderRadius: "10px", border: "0.5px solid var(--border-em, rgba(0,0,0,0.18))", background: "var(--surface-secondary, #f0efea)", fontSize: "13px", outline: "none" }}
+          />
+        </div>
+
+        <div className="animate-fade-in" style={{ animationDelay: "0.2s" }}>
+          <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted, #888780)", display: "block", marginBottom: "6px" }}>INTERACTION TYPE</label>
+          <select
+            name="interaction_type"
+            value={formData.interaction_type}
+            onChange={handleChange}
+            style={{ width: "100%", padding: "10px 12px", borderRadius: "10px", border: "0.5px solid var(--border-em, rgba(0,0,0,0.18))", background: "var(--surface-secondary, #f0efea)", fontSize: "13px", outline: "none" }}
+          >
+            <option>In-person</option>
+            <option>Call</option>
+            <option>Email</option>
+            <option>Conference</option>
+          </select>
+        </div>
+
+        <div className="animate-fade-in" style={{ animationDelay: "0.3s" }}>
+          <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted, #888780)", display: "block", marginBottom: "6px" }}>PRODUCTS DISCUSSED</label>
+          <input
+            name="products"
+            value={formData.products}
+            onChange={handleChange}
+            placeholder="e.g. Amoxicillin, Metformin"
+            style={{ width: "100%", padding: "10px 12px", borderRadius: "10px", border: "0.5px solid var(--border-em, rgba(0,0,0,0.18))", background: "var(--surface-secondary, #f0efea)", fontSize: "13px", outline: "none" }}
+          />
+        </div>
+
+        <div className="animate-fade-in" style={{ animationDelay: "0.4s" }}>
+          <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted, #888780)", display: "block", marginBottom: "6px" }}>NOTES</label>
+          <textarea
+            name="notes"
+            value={formData.notes}
+            onChange={handleChange}
+            rows="4"
+            placeholder="Brief summary of the meeting..."
+            style={{ width: "100%", padding: "10px 12px", borderRadius: "10px", border: "0.5px solid var(--border-em, rgba(0,0,0,0.18))", background: "var(--surface-secondary, #f0efea)", fontSize: "13px", resize: "none", outline: "none" }}
+          />
+        </div>
+
+        <div className="animate-fade-in" style={{ animationDelay: "0.5s" }}>
+          <label style={{ fontSize: "11px", fontWeight: 600, color: "var(--text-muted, #888780)", display: "block", marginBottom: "6px" }}>FOLLOW-UP DATE</label>
+          <input
+            name="follow_up_date"
+            type="date"
+            value={formData.follow_up_date}
+            onChange={handleChange}
+            style={{ width: "100%", padding: "10px 12px", borderRadius: "10px", border: "0.5px solid var(--border-em, rgba(0,0,0,0.18))", background: "var(--surface-secondary, #f0efea)", fontSize: "13px", outline: "none" }}
+          />
+        </div>
+
+        <button
+          type="submit"
+          className="btn-primary animate-fade-in"
+          style={{
+            marginTop: "8px",
+            padding: "12px",
+            borderRadius: "10px",
+            background: tokens.teal.mid,
+            color: "#fff",
+            border: "none",
+            fontWeight: 600,
+            fontSize: "13px",
+            cursor: "pointer",
+            animationDelay: "0.6s"
+          }}
+        >
+          Save Interaction
+        </button>
+      </form>
     </div>
   );
 }
@@ -564,6 +750,7 @@ function DashboardPanel({ interactions, newestId }) {
       </div>
 
       <div
+        className="custom-scroll scroll-smooth"
         style={{
           flex: 1,
           overflowY: "auto",
@@ -616,6 +803,7 @@ export default function App() {
   const interactions = useSelector((state) => state.interactions.list);
   const chatHistory = useSelector((state) => state.interactions.chatHistory);
   const chatStatus = useSelector((state) => state.interactions.chatStatus);
+  const extractedData = useSelector((state) => state.interactions.extractedData);
   
   const [activeTab, setActiveTab] = useState("Log Interaction");
   const [newestId, setNewestId] = useState(null);
@@ -628,13 +816,32 @@ export default function App() {
     const wsUrl = import.meta.env.VITE_WS_URL || (import.meta.env.DEV ? 'ws://localhost:8000/ws' : null);
     
     if (wsUrl) {
+      console.log("🔌 Attempting WebSocket connection to:", wsUrl);
       const socket = new WebSocket(wsUrl);
+      
+      socket.onopen = () => {
+        console.log("✅ WebSocket connected successfully");
+      };
+
       socket.onmessage = (event) => {
+        console.log("📥 WebSocket message received:", event.data);
         if (event.data === 'update') {
+          console.log("🔄 Triggering interaction refresh...");
           dispatch(fetchInteractions());
         }
       };
+
+      socket.onerror = (error) => {
+        console.error("❌ WebSocket error:", error);
+      };
+
+      socket.onclose = (event) => {
+        console.log("🔌 WebSocket closed. Code:", event.code, "Reason:", event.reason);
+      };
+
       return () => socket.close();
+    } else {
+      console.warn("⚠️ WebSocket URL not found. Real-time updates disabled.");
     }
   }, [dispatch]);
 
@@ -642,10 +849,16 @@ export default function App() {
     dispatch(addChatUserMessage(text));
     const result = await dispatch(chatWithAgent({ message: text, thread_id: 'default' }));
     
-    if (result.payload && result.payload.extracted_data) {
+    if (result.payload && (result.payload.extracted_data || result.payload.response)) {
        dispatch(fetchInteractions());
-       // Find the newest interaction if it was just created
-       // This is a bit tricky since we don't have the ID yet, but fetchInteractions will update the list
+    }
+  };
+
+  const handleManualSave = async (data) => {
+    const result = await dispatch(addInteraction(data));
+    if (result.payload) {
+      dispatch(fetchInteractions());
+      setNewestId(result.payload.id);
     }
   };
 
@@ -674,17 +887,46 @@ export default function App() {
       >
         <Topbar activeTab={activeTab} setActiveTab={setActiveTab} />
 
-        <div
-          style={{
-            flex: 1,
-            display: "grid",
-            gridTemplateColumns: "1fr 1fr",
-            overflow: "hidden",
-          }}
-        >
-          <ChatPanel messages={chatHistory} onSend={handleSend} chatStatus={chatStatus} />
-          <DashboardPanel interactions={interactions} newestId={newestId} />
-        </div>
+        {activeTab === "Log Interaction" ? (
+          <div
+            style={{
+              flex: 1,
+              display: "flex",
+              flexDirection: "column",
+              overflow: "hidden",
+            }}
+          >
+            {/* Top Row: AI Chat + Manual Form side by side */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 1fr",
+                flex: "1 1 50%",
+                minHeight: 0,
+                overflow: "hidden",
+              }}
+            >
+              <ChatPanel messages={chatHistory} onSend={handleSend} chatStatus={chatStatus} />
+              <ManualForm onSave={handleManualSave} extractedData={extractedData} />
+            </div>
+
+            {/* Bottom Row: Dashboard full width */}
+            <div
+              style={{
+                flex: "1 1 50%",
+                minHeight: 0,
+                overflow: "hidden",
+                borderTop: "0.5px solid var(--border, rgba(0,0,0,0.12))",
+              }}
+            >
+              <DashboardPanel interactions={interactions} newestId={newestId} />
+            </div>
+          </div>
+        ) : (
+          <div style={{ flex: 1, overflow: "hidden" }}>
+            <DashboardPanel interactions={interactions} newestId={newestId} />
+          </div>
+        )}
       </div>
     </div>
   );

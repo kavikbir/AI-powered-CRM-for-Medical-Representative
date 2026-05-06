@@ -239,25 +239,27 @@ def call_model(state: AgentState):
         try:
             response = llm_with_tools.invoke(invoke_messages)
         except Exception as e:
-            # Fallback for Groq/Llama 3.1 tool call failures
+            # Fallback for Groq/Llama 3.1 tool call failures (like BadRequestError 400)
+            print(f"Groq tool-calling failed, falling back to raw invoke: {e}")
             response = llm.invoke(invoke_messages)
         
     import re
     import json
     
-    # NLP Native Extraction: Capture the arguments the LLM decided to use!
-    
     # 1. Fallback Parser for Groq Llama 3.1 XML Leak (Relaxed Regex)
-    if not getattr(response, "tool_calls", None) and response.content and "<function=" in response.content:
-        match = re.search(r'<function=(\w+)>(.*)', response.content, re.DOTALL)
-        if match:
-            tool_name = match.group(1)
-            content = match.group(2).split("</function>")[0].strip()
+    # This captures <function=tool_name>{"arg": "val"}</function> or similar formats
+    if (not getattr(response, "tool_calls", None) or len(response.tool_calls) == 0) and response.content:
+        # Match <function=name>args</function> or just <function=name>args
+        xml_match = re.search(r'<function=(\w+)>(.*)', response.content, re.DOTALL)
+        if xml_match:
+            tool_name = xml_match.group(1)
+            content = xml_match.group(2).split("</function>")[0].strip()
             try:
+                # Try to parse the entire content as JSON
                 tool_args = json.loads(content)
                 response.tool_calls = [{"name": tool_name, "args": tool_args, "id": "call_manual_" + str(hash(content))}]
             except:
-                # If JSON is still malformed, try to find a JSON-like block
+                # If that fails, try to find a JSON block {} within the content
                 json_match = re.search(r'\{.*\}', content, re.DOTALL)
                 if json_match:
                     try:

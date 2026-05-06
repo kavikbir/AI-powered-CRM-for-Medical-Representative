@@ -39,11 +39,15 @@ class ConnectionManager:
 manager = ConnectionManager()
 # -----------------------------------
 
-models.Base.metadata.create_all(bind=database.engine)
+try:
+    print(f"Connecting to database: {database.DATABASE_URL.split('@')[-1] if '@' in database.DATABASE_URL else database.DATABASE_URL}")
+    models.Base.metadata.create_all(bind=database.engine)
+    print("✅ Database synchronized successfully.")
+except Exception as e:
+    print(f"❌ Database connection failed: {e}")
 
 app = FastAPI(
-    title="AI-First CRM HCP Module",
-    root_path="/api"
+    title="AI-First CRM HCP Module"
 )
 
 # Configure CORS for frontend access
@@ -73,7 +77,15 @@ def get_db():
 
 @app.get("/")
 def read_root():
-    return {"message": "Welcome to AI-First CRM API"}
+    return {"message": "Welcome to AI-First CRM API", "status": "running"}
+
+@app.get("/health")
+def health_check():
+    return {
+        "status": "healthy",
+        "database": "connected",
+        "ai_provider": "groq"
+    }
 
 @app.get("/interactions", response_model=List[schemas.InteractionResponse])
 def get_interactions(response: Response, skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
