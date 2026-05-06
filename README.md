@@ -163,6 +163,25 @@ Because the backend uses **SQLAlchemy**, switching to a production database requ
 
 ---
 
-## 🛡️ Stability & Fallbacks
+## 🛡️ Stability, Fallbacks & Diagnostics
+
+- **Intelligent Database Fallback**: The system now automatically detects if a production database (like Supabase) is unreachable and gracefully falls back to a local SQLite instance (`hcp.db`). This ensures the CRM never crashes during a demo.
+- **Diagnostic Tool**: A new health-check script is available. Run it to verify your API keys and database connectivity:
+  ```bash
+  python backend/diagnose.py
+  ```
+- **Real-Time WebSocket Sync**: We've added robust connection logging and auto-refresh logic. The frontend now monitors the WebSocket state and triggers a full data fetch whenever a change is detected, ensuring the dashboard is always 100% accurate.
 - **Bulletproof Parsing**: If the LLM generates malformed JSON or broken XML tags, a custom RegEx fallback parser ensures the data is salvaged and saved anyway.
-- **Thread Safety**: The system uses `BackgroundTasks` to ensure that long-running LLM inferences never block the FastAPI event loop or WebSocket connections.
+
+---
+
+## 📦 Version Control & Deployment
+
+The project is synchronized with GitHub. To push the latest stable changes:
+```bash
+git add .
+git commit -m "Stable: Final demo ready with robust DB fallback"
+git push origin main
+```
+
+**Remote Repository**: [AI-powered-CRM-for-Medical-Representative](https://github.com/kavikbir/AI-powered-CRM-for-Medical-Representative.git)
