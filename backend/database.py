@@ -10,8 +10,12 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 db_path = os.path.join(BASE_DIR, 'hcp.db').replace('\\', '/')
 DATABASE_URL = os.getenv("DATABASE_URL")
 
-# Force SQLite if DATABASE_URL is not set or if it's the specific Supabase one that might be failing in this environment
-if not DATABASE_URL or DATABASE_URL.strip() == "" or "supabase.co" in DATABASE_URL:
+# Fix Heroku/Supabase postgres:// to postgresql:// scheme (required by SQLAlchemy 1.4+)
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+# Use SQLite fallback if DATABASE_URL is not set
+if not DATABASE_URL or DATABASE_URL.strip() == "":
     DATABASE_URL = f"sqlite:///{db_path}"
     print(f"Using local SQLite database: {db_path}")
 else:

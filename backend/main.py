@@ -46,9 +46,32 @@ try:
 except Exception as e:
     print(f"❌ Database connection failed: {e}")
 
+class APIPrefixMiddleware:
+    def __init__(self, app):
+        self.app = app
+
+    async def __call__(self, scope, receive, send):
+        if scope["type"] in ("http", "websocket"):
+            path = scope.get("path", "")
+            if path.startswith("/api"):
+                new_path = path[4:]
+                if not new_path.startswith("/"):
+                    new_path = "/" + new_path
+                scope["path"] = new_path
+                
+                raw_path = scope.get("raw_path", b"")
+                if raw_path.startswith(b"/api"):
+                    new_raw = raw_path[4:]
+                    if not new_raw.startswith(b"/"):
+                        new_raw = b"/" + new_raw
+                    scope["raw_path"] = new_raw
+        await self.app(scope, receive, send)
+
 app = FastAPI(
     title="AI-First CRM HCP Module"
 )
+
+app.add_middleware(APIPrefixMiddleware)
 
 # Configure CORS for frontend access
 app.add_middleware(
