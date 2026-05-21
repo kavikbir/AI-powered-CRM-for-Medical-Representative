@@ -6,8 +6,11 @@ from dotenv import load_dotenv
 load_dotenv(override=True)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-# Ensure forward slashes for SQLite URL on Windows
-db_path = os.path.join(BASE_DIR, 'hcp.db').replace('\\', '/')
+# On Vercel, the directory is read-only. Fall back to /tmp for SQLite database file if running on Vercel.
+if os.getenv("VERCEL"):
+    db_path = "/tmp/hcp.db"
+else:
+    db_path = os.path.join(BASE_DIR, 'hcp.db').replace('\\', '/')
 DATABASE_URL = os.getenv("DATABASE_URL")
 
 # Fix Heroku/Supabase postgres:// to postgresql:// scheme (required by SQLAlchemy 1.4+)
